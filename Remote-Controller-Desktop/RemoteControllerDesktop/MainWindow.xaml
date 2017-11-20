@@ -1,0 +1,41 @@
+﻿<Controls:MetroWindow x:Class="RemoteController.Desktop.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:Controls="clr-namespace:MahApps.Metro.Controls;assembly=MahApps.Metro"
+        mc:Ignorable="d"
+                      Title="Remote Controller"
+                      Height="580"
+                      Width="600"
+                      IsMaxRestoreButtonEnabled="False"
+                      ShowMaxRestoreButton="False"
+                      TitleCaps="False"
+                      Icon="app_icon.ico"
+                      ShowIconOnTitleBar="False"
+                      BorderThickness="0" 
+                      GlowBrush="Black"
+                      ResizeMode="CanMinimize" WindowTitleBrush="#FF455860" StateChanged="MetroWindow_StateChanged">
+
+    <Controls:MetroWindow.RightWindowCommands>
+        <Controls:WindowCommands>
+            <Button Content="About" Click="ButtonInfo_Click" />
+        </Controls:WindowCommands>
+    </Controls:MetroWindow.RightWindowCommands>
+    <StackPanel>
+        <StackPanel Orientation="Horizontal" Background="#FF678390">
+            <Image Source="app_logo_transparent.png" Height="64" />
+            <Label Content="Scan QR Code Below" VerticalAlignment="Center" Foreground="White" FontSize="18" FontFamily="/RemoteControllerDesktop;component/Fonts/#Roboto"/>
+        </StackPanel>
+        <Image Height="410" Source="ic_dialog_alert_holo_light.png" Stretch="None" Name="ImageQRCode"/>
+        <StackPanel Orientation="Horizontal" Margin="0">
+            <Image Source="ic_wifi_black_24dp.png" Height="36" Margin="12,0,0,0" />
+            <Label x:Name="LabelIP" VerticalAlignment="Center" VerticalContentAlignment="Center" FontFamily="/RemoteControllerDesktop;component/Fonts/#Roboto" FontSize="14"/>
+        </StackPanel>
+        <StackPanel Orientation="Horizontal">
+            <Image Source="ic_vpn_key_black_24dp.png" Height="36" Margin="12,0,0,0" />
+            <Label x:Name="LabelPIN" VerticalAlignment="Center" VerticalContentAlignment="Center" FontFamily="/RemoteControllerDesktop;component/Fonts/#Roboto" FontSize="14"/>
+            <Label Content="Refresh" x:Name="LabelPINRefresh" Background="White" Foreground="#FF0046BF" VerticalContentAlignment="Center" MouseUp="LabelPINRefresh_MouseUp" FontFamily="/RemoteControllerDesktop;component/Fonts/#Roboto" FontSize="14"/>
+        </StackPanel>
+    </StackPanel>
+</Controls:MetroWindow>
