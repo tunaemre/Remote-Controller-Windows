@@ -63,11 +63,21 @@ namespace RemoteController.Desktop
             }
         }
 
+        protected string Token
+        {
+            get
+            {
+                return Guid.NewGuid().ToString();
+            }
+        }
+
+        static string LocalhostIP = "127.0.0.1";
         static string CurrentIP = null;
         static string CurrentPIN = null;
+        static string CurrentToken = null;
 
-        static string ListenerIP = "127.0.0.1";
         static int ListenerPort = 13000;
+        static int SenderPort = 13001;
 
         static float ScaleXFactor = 1f;
         static float ScaleYFactor = 1f;
@@ -83,7 +93,6 @@ namespace RemoteController.Desktop
 
             if (InitializeWindow().Result)
             {
-                IPAddress serverAddress = IPAddress.Parse(ListenerIP);
                 TcpListener initialTcpListener = new TcpListener(IPAddress.Any, ListenerPort);
                 initialTcpListener.Start();
 
@@ -95,6 +104,7 @@ namespace RemoteController.Desktop
         {
             CurrentIP = LocalIP;
             CurrentPIN = PIN;
+            CurrentToken = Token;
 
             if (CurrentIP == null)
             {
@@ -115,11 +125,11 @@ namespace RemoteController.Desktop
         static BitmapImage GenerateQRCode(string ip, string pin)
         {
             JObject qrData = new JObject();
-            qrData.Add("Action", "IPAndPortRecognize");
+            qrData.Add("Action", "Authorize");
             qrData.Add("IP", ip);
             qrData.Add("PIN", pin);
-            qrData.Add("MainListenerPort", "13000");
-            //qrData.Add("MainSenderPort", "13001");
+            qrData.Add("ListenerPort", ListenerPort);
+            qrData.Add("SenderPort", SenderPort);
 
             QRCodeGenerator qrGenerator = new QRCodeGenerator();
             QRCodeData qrCodeData = qrGenerator.CreateQrCode(qrData.ToString(Newtonsoft.Json.Formatting.None), QRCodeGenerator.ECCLevel.Q);
@@ -148,7 +158,19 @@ namespace RemoteController.Desktop
             }
         }
 
-        void AcceptTcpClientCallback(IAsyncResult ar)
+        async Task SendToTcpClient(string data)
+        {
+            using (TcpClient senderTcpClient = new TcpClient())
+            {
+                await senderTcpClient.ConnectAsync(LocalhostIP, SenderPort);
+                NetworkStream outputStream = senderTcpClient.GetStream();
+                await outputStream.WriteAsync(Encoding.UTF8.GetBytes(data.ToCharArray()), 0, data.Length);
+
+                await outputStream.FlushAsync();
+            }
+        }
+
+        async void AcceptTcpClientCallback(IAsyncResult ar)
         {
             TcpListener listener = (TcpListener)ar.AsyncState;
             TcpClient client = listener.EndAcceptTcpClient(ar);
@@ -156,7 +178,7 @@ namespace RemoteController.Desktop
             NetworkStream inputStream = client.GetStream();
             byte[] data = new byte[client.ReceiveBufferSize];
 
-            int bytesRead = inputStream.Read(data, 0, client.ReceiveBufferSize);
+            int bytesRead = await inputStream.ReadAsync(data, 0, client.ReceiveBufferSize);
             string request = Encoding.ASCII.GetString(data, 0, bytesRead);
 
             inputStream.Close();
@@ -169,18 +191,26 @@ namespace RemoteController.Desktop
 
                 if (baseAction.action == BaseAction.ActionType.Hello)
                 {
-                    App.ShowNotifyIcon(Properties.Resources.app_icon, "Connected.");
+                    //JObject authData = new JObject();
+                    //authData.Add("Action", "Token");
+                    //authData.Add("Token", CurrentToken);
+
+                    //await SendToTcpClient(authData.ToString());
 
                     if (this.Visibility == System.Windows.Visibility.Visible)
-                        Dispatcher.BeginInvoke((Action)(() =>
+                        await Dispatcher.BeginInvoke((Action)(() =>
                         {
+                            App.ShowNotifyIcon(Properties.Resources.app_icon, "Connected.");
                             this.Hide();
                         }));
                 }
 
                 if (baseAction.action == BaseAction.ActionType.Goodbye)
                 {
-                    App.ShowNotifyIcon(Properties.Resources.app_icon, "Disconnected.");
+                    await Dispatcher.BeginInvoke((Action)(() =>
+                    {
+                        App.ShowNotifyIcon(Properties.Resources.app_icon, "Disconnected.");
+                    }));
                 }
 
                 if (baseAction.action == BaseAction.ActionType.ScreenRecognize)
@@ -192,6 +222,23 @@ namespace RemoteController.Desktop
 
                     ScaleXFactor = (float)primaryScreenX / action.remoteScreenX;
                     ScaleYFactor = (float)primaryScreenY / action.remoteScreenY;
+                }
+
+                if (baseAction.action == BaseAction.ActionType.Clipboard)
+                {
+                    ClipboardCommand action = new ClipboardCommand(jsonObject);
+                    await Dispatcher.BeginInvoke((Action)(() =>
+                    {
+                        System.Windows.Clipboard.SetText(action.data);
+                        App.ShowNotifyIcon(Properties.Resources.app_icon, "Text copied to clipboard.");
+                    }));
+                }
+
+                if (baseAction.action == BaseAction.ActionType.Text)
+                {
+                    ClipboardCommand action = new ClipboardCommand(jsonObject);
+                    System.Windows.Forms.SendKeys.SendWait(action.data);
+                    keybd_event((byte)System.Windows.Forms.Keys.Enter, 0, 0, 0);
                 }
 
                 if (baseAction.action == BaseAction.ActionType.MouseMove)
@@ -375,7 +422,7 @@ namespace RemoteController.Desktop
         {
             if (this.WindowState == System.Windows.WindowState.Minimized)
             {
-                App.ShowNotifyIcon(Properties.Resources.app_icon, "Remote Controller Client still running.");
+                App.ShowNotifyIcon(Properties.Resources.app_icon, "Remote Controller Desktop still running.");
                 this.Hide();
             }
         }

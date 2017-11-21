@@ -25,6 +25,8 @@ namespace RemoteController.Desktop
             Hello,
             Goodbye,
             ScreenRecognize,
+            Clipboard,
+            Text,
             MouseMove,
             MouseMoveRelative,
             MouseDown,
@@ -66,6 +68,26 @@ namespace RemoteController.Desktop
         {
             this.remoteScreenX = obj["X"].ToObject<int>();
             this.remoteScreenY = obj["Y"].ToObject<int>();
+        }
+    }
+
+    public class ClipboardCommand : BaseAction
+    {
+        public string data { get; internal set; }
+
+        public ClipboardCommand(JObject obj) : base(obj)
+        {
+            this.data = obj["Data"].ToString();
+        }
+    }
+
+    public class TextCommand : BaseAction
+    {
+        public string data { get; internal set; }
+
+        public TextCommand(JObject obj) : base(obj)
+        {
+            this.data = obj["Data"].ToString();
         }
     }
 
