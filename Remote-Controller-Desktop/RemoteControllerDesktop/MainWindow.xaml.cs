@@ -197,18 +197,20 @@ namespace RemoteController.Desktop
 
                     //await SendToTcpClient(authData.ToString());
 
-                    App.ShowNotifyIcon(Properties.Resources.app_icon, "Connected.");
-
                     if (this.Visibility == System.Windows.Visibility.Visible)
                         await Dispatcher.BeginInvoke((Action)(() =>
                         {
+                            App.ShowNotifyIcon(Properties.Resources.app_icon, "Connected.");
                             this.Hide();
                         }));
                 }
 
                 if (baseAction.action == BaseAction.ActionType.Goodbye)
                 {
-                    App.ShowNotifyIcon(Properties.Resources.app_icon, "Disconnected.");
+                    await Dispatcher.BeginInvoke((Action)(() =>
+                    {
+                        App.ShowNotifyIcon(Properties.Resources.app_icon, "Disconnected.");
+                    }));
                 }
 
                 if (baseAction.action == BaseAction.ActionType.ScreenRecognize)
@@ -225,15 +227,17 @@ namespace RemoteController.Desktop
                 if (baseAction.action == BaseAction.ActionType.Clipboard)
                 {
                     ClipboardCommand action = new ClipboardCommand(jsonObject);
-                    System.Windows.Clipboard.SetText(action.data);
-
-                    App.ShowNotifyIcon(Properties.Resources.app_icon, "Text copied to clipboard.");
+                    await Dispatcher.BeginInvoke((Action)(() =>
+                    {
+                        System.Windows.Clipboard.SetText(action.data);
+                        App.ShowNotifyIcon(Properties.Resources.app_icon, "Text copied to clipboard.");
+                    }));
                 }
 
                 if (baseAction.action == BaseAction.ActionType.Text)
                 {
                     ClipboardCommand action = new ClipboardCommand(jsonObject);
-                    System.Windows.Forms.SendKeys.Send(action.data);
+                    System.Windows.Forms.SendKeys.SendWait(action.data);
                     keybd_event((byte)System.Windows.Forms.Keys.Enter, 0, 0, 0);
                 }
 
