@@ -74,10 +74,9 @@ namespace RemoteController.Desktop
         static string LocalhostIP = "127.0.0.1";
         static string CurrentIP = null;
         static string CurrentPIN = null;
-        static string CurrentToken = null;
+        public static string CurrentToken = null;
 
-        static int ListenerPort = 13000;
-        static int SenderPort = 13001;
+        static int Port = 13000;
 
         static float ScaleXFactor = 1f;
         static float ScaleYFactor = 1f;
@@ -93,7 +92,7 @@ namespace RemoteController.Desktop
 
             if (InitializeWindow().Result)
             {
-                TcpListener initialTcpListener = new TcpListener(IPAddress.Any, ListenerPort);
+                TcpListener initialTcpListener = new TcpListener(IPAddress.Any, Port);
                 initialTcpListener.Start();
 
                 initialTcpListener.BeginAcceptTcpClient(new AsyncCallback(AcceptTcpClientCallback), initialTcpListener);
@@ -125,11 +124,9 @@ namespace RemoteController.Desktop
         static BitmapImage GenerateQRCode(string ip, string pin)
         {
             JObject qrData = new JObject();
-            qrData.Add("Action", "Authorize");
             qrData.Add("IP", ip);
             qrData.Add("PIN", pin);
-            qrData.Add("ListenerPort", ListenerPort);
-            qrData.Add("SenderPort", SenderPort);
+            qrData.Add("Port", Port);
 
             QRCodeGenerator qrGenerator = new QRCodeGenerator();
             QRCodeData qrCodeData = qrGenerator.CreateQrCode(qrData.ToString(Newtonsoft.Json.Formatting.None), QRCodeGenerator.ECCLevel.Q);
@@ -158,32 +155,17 @@ namespace RemoteController.Desktop
             }
         }
 
-        async Task SendToTcpClient(string data)
-        {
-            using (TcpClient senderTcpClient = new TcpClient())
-            {
-                await senderTcpClient.ConnectAsync(LocalhostIP, SenderPort);
-                NetworkStream outputStream = senderTcpClient.GetStream();
-                await outputStream.WriteAsync(Encoding.UTF8.GetBytes(data.ToCharArray()), 0, data.Length);
-
-                await outputStream.FlushAsync();
-            }
-        }
-
         async void AcceptTcpClientCallback(IAsyncResult ar)
         {
             TcpListener listener = (TcpListener)ar.AsyncState;
             TcpClient client = listener.EndAcceptTcpClient(ar);
 
-            NetworkStream inputStream = client.GetStream();
-            byte[] data = new byte[client.ReceiveBufferSize];
+            NetworkStream stream = client.GetStream();
+            byte[] dataBytes = new byte[client.ReceiveBufferSize];
 
-            int bytesRead = await inputStream.ReadAsync(data, 0, client.ReceiveBufferSize);
-            string request = Encoding.ASCII.GetString(data, 0, bytesRead);
-
-            inputStream.Close();
-            client.Close();
-
+            int bytesRead = await stream.ReadAsync(dataBytes, 0, client.ReceiveBufferSize);
+            string request = Encoding.ASCII.GetString(dataBytes, 0, bytesRead);
+            
             try
             {
                 JObject jsonObject = JObject.Parse(request);
@@ -191,18 +173,82 @@ namespace RemoteController.Desktop
 
                 if (baseAction.action == BaseAction.ActionType.Hello)
                 {
-                    //JObject authData = new JObject();
-                    //authData.Add("Action", "Token");
-                    //authData.Add("Token", CurrentToken);
+                    HelloCommand action = new HelloCommand(jsonObject);
+                    if (action.pin.Equals(CurrentPIN))
+                    {
+                        ProgressDialogController progress = await this.ShowProgressAsync("Please wait", "Authenticating...");
 
-                    //await SendToTcpClient(authData.ToString());
+                        JObject authData = new JObject();
+                        authData.Add("Result", true);
+                        authData.Add("Token", CurrentToken);
+                        byte[] authDataBytes = Encoding.UTF8.GetBytes(authData.ToString());
 
-                    if (this.Visibility == System.Windows.Visibility.Visible)
-                        await Dispatcher.BeginInvoke((Action)(() =>
+                        lock (stream)
                         {
-                            App.ShowNotifyIcon(Properties.Resources.app_icon, "Connected.");
-                            this.Hide();
-                        }));
+                            stream.Write(authDataBytes, 0, authDataBytes.Length);
+                        }
+
+                        await progress.CloseAsync();
+
+                        if (this.Visibility == System.Windows.Visibility.Visible)
+                            await Dispatcher.BeginInvoke((Action)(() =>
+                            {
+                                App.ShowNotifyIcon(Properties.Resources.app_icon, "Connected.");
+                                
+                                this.Hide();
+                            }));
+                    }
+                    else
+                    {
+                        JObject authData = new JObject();
+                        authData.Add("Result", false);
+                        byte[] authDataBytes = Encoding.UTF8.GetBytes(authData.ToString());
+
+                        lock (stream)
+                        {
+                            stream.Write(authDataBytes, 0, authDataBytes.Length);
+                        }
+                    }
+                }
+
+                if (baseAction.action == BaseAction.ActionType.Authenticate)
+                {
+                    AuthBaseAction action = new AuthBaseAction(jsonObject, false);
+                    if (action.secret.Equals(CurrentToken))
+                    {
+                        ProgressDialogController progress = await this.ShowProgressAsync("Please wait", "Authenticating...");
+
+                        JObject authData = new JObject();
+                        authData.Add("Result", true);
+                        authData.Add("Token", CurrentToken);
+                        byte[] authDataBytes = Encoding.UTF8.GetBytes(authData.ToString());
+
+                        lock (stream)
+                        {
+                            stream.Write(authDataBytes, 0, authDataBytes.Length);
+                        }
+
+                        await progress.CloseAsync();
+
+                        if (this.Visibility == System.Windows.Visibility.Visible)
+                            await Dispatcher.BeginInvoke((Action)(() =>
+                            {
+                                App.ShowNotifyIcon(Properties.Resources.app_icon, "Connected.");
+
+                                this.Hide();
+                            }));
+                    }
+                    else
+                    {
+                        JObject authData = new JObject();
+                        authData.Add("Result", false);
+                        byte[] authDataBytes = Encoding.UTF8.GetBytes(authData.ToString());
+
+                        lock (stream)
+                        {
+                            stream.Write(authDataBytes, 0, authDataBytes.Length);
+                        }
+                    }
                 }
 
                 if (baseAction.action == BaseAction.ActionType.Goodbye)
@@ -401,6 +447,8 @@ namespace RemoteController.Desktop
             }
             finally
             {
+                stream.Close();
+                client.Close();
                 listener.BeginAcceptTcpClient(new AsyncCallback(AcceptTcpClientCallback), listener);
             }
         }
