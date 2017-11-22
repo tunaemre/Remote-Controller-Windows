@@ -84,7 +84,9 @@ namespace RemoteController.Desktop
         bool MouseButtonPressing = false;
         int PressingMouseButtonID = 0;
 
-        Point CapturedMouseLocation;   
+        Point CapturedMouseLocation;
+
+        ProgressDialogController Progress;
 
         public MainWindow()
         {
@@ -176,7 +178,10 @@ namespace RemoteController.Desktop
                     HelloCommand action = new HelloCommand(jsonObject);
                     if (action.pin.Equals(CurrentPIN))
                     {
-                        ProgressDialogController progress = await this.ShowProgressAsync("Please wait", "Authenticating...");
+                        await Dispatcher.BeginInvoke((Action)(async() =>
+                        {
+                            Progress = await this.ShowProgressAsync("Please wait", "Authenticating...");
+                        }));
 
                         JObject authData = new JObject();
                         authData.Add("Result", true);
@@ -187,8 +192,6 @@ namespace RemoteController.Desktop
                         {
                             stream.Write(authDataBytes, 0, authDataBytes.Length);
                         }
-
-                        await progress.CloseAsync();
 
                         if (this.Visibility == System.Windows.Visibility.Visible)
                             await Dispatcher.BeginInvoke((Action)(() =>
@@ -447,6 +450,15 @@ namespace RemoteController.Desktop
             }
             finally
             {
+                await Dispatcher.BeginInvoke((Action)(async () =>
+                {
+                    if (Progress != null)
+                    {
+                        await Progress.CloseAsync();
+                        Progress = null;
+                    }
+                }));
+
                 stream.Close();
                 client.Close();
                 listener.BeginAcceptTcpClient(new AsyncCallback(AcceptTcpClientCallback), listener);
